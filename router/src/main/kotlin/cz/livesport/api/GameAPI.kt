@@ -33,12 +33,30 @@ private const val CONFIG_SERVICE = "http://localhost:8082"
 
 suspend fun getGames(projectId: String, lang: String): Games {
     val features = fetch("$CONFIG_SERVICE/features/$projectId", object : TypeReference<Set<String>>() {}) ?: emptySet()
-    val title = fetch("$CONFIG_SERVICE/translate?lang=$lang&key=RPS", object : TypeReference<Translation>() {})
-    val resultLabel = fetch("$CONFIG_SERVICE/translate?lang=$lang&key=res", object : TypeReference<Translation>() {})
-    val matches =
-        fetch("$RPS_SERVICE/matches/rock-paper-scissors", object : TypeReference<List<Match>>() {}) ?: emptyList()
+    if (features.contains("RPS")) {
+        val title =
+            coroutineScope {
+                async {
+                    fetch("$CONFIG_SERVICE/translate?lang=$lang&key=RPS", object : TypeReference<Translation>() {})
+                }
+            }
+        val resultLabel =
+            coroutineScope {
+                async {
+                    fetch("$CONFIG_SERVICE/translate?lang=$lang&key=res", object : TypeReference<Translation>() {})
+                }
+            }
+        val matches = coroutineScope {
+            async {
+                fetch("$RPS_SERVICE/matches/rock-paper-scissors", object : TypeReference<List<Match>>() {})
+                    ?: emptyList()
+            }
+        }
 
-    return Games(emptyList(), "", "")
+        return Games(matches.await(), title.await()?.value ?: "RPS", resultLabel.await()?.value ?: "res")
+    } else {
+        return Games(emptyList(), "", "")
+    }
 }
 
 data class Translation(
